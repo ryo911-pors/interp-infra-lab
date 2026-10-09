@@ -1,8 +1,8 @@
-# 私的なメモ（Google Drive で別に同期する）
+# 私的なメモ（必要なときに本人が共有する）
 CLAUDE.md
 PLAN.md
 
-# 活性値データ（GB 単位。そもそも OneDrive の外に置く）
+# 活性値データ（GB 単位。そもそもリポジトリの外に置く）
 data/
 *.npy
 *.safetensors

@@ -1,0 +1,23 @@
+[project]
+name = "interp-infra-lab"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "datasets>=5.1.0",
+    "numpy>=2.5.3",
+    "torch>=2.14.1",
+    "transformer-lens>=4.0.0",
+]
+
+# RTX 5070（Blackwell, compute capability 12.0）は CUDA 12.8 以降の PyTorch が必要。
+# torch 2.14 の Windows 版は cu130 / cu132 にしか無い（cu128 は 2.11 で止まっている）。
+# Windows / Linux は CUDA 版、Mac は PyPI の通常版（MPS）を使う。
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130", marker = "sys_platform != 'darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
