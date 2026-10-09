@@ -1,0 +1,19 @@
+# 私的なメモ（Google Drive で別に同期する）
+CLAUDE.md
+PLAN.md
+
+# 活性値データ（GB 単位。そもそも OneDrive の外に置く）
+data/
+*.npy
+*.safetensors
+*.parquet
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
