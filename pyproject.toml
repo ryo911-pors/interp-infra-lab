@@ -5,6 +5,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "datasets>=5.1.0",
     "numpy>=2.5.3",
+    "pip-system-certs>=5.3 ; sys_platform == 'win32'",
     "torch>=2.14.1",
     "transformer-lens>=4.0.0",
 ]
