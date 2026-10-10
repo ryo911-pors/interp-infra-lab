@@ -39,7 +39,12 @@ for shard_idx in range(N_SHARDS):
             buffer.append(get_acts(chunk))
 
     acts = np.concatenate(buffer)
-    np.save(path, acts)
+    
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        np.save(f, acts)
+    os.replace(tmp, path)
+    
     n += len(acts)
     print(f"saved {path} {acts.shape}")
 
