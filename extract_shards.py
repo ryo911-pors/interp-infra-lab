@@ -4,18 +4,20 @@ import numpy as np
 import torch
 import json
 from datasets import load_dataset
-from transformer_lens import HookedTransformer
+from transformers import AutoModel, AutoTokenizer
 
-HOOK = "blocks.6.hook_resid_post"
+
+
 CTX = 1024
 DOCS_PER_SHARD = 100
 N_SHARDS = 10
 MAX_TOKENS_PER_DOC = 1024 
+LAYER = 6
 
 CONFIG = {                  
     "model": "gpt2-small",
-    "loader": "HookedTransformer.from_pretrained",   
-    "hook": HOOK,
+    "loader": "transformers.AutoModel (no processing)",   
+    "hook": f"h[{LAYER}] output",
     "dtype": "float32",
     "dataset": "NeelNanda/pile-10k",
     "ctx": CTX,
@@ -23,14 +25,18 @@ CONFIG = {
     "docs_per_shard": DOCS_PER_SHARD,
 }
 
-out_dir = os.path.join(os.environ["ACTS_DIR"], "gpt2_16")
+out_dir = os.path.join(os.environ["ACTS_DIR"], "gpt2_16_hf")
 os.makedirs(out_dir, exist_ok=True)
 manifest_path = os.path.join(out_dir, "manifest.json")
 
 def load_manifest():
     if os.path.exists(manifest_path):
         with open(manifest_path) as f:
-            return json.load(f)
+            manifest = json.load(f)
+        if manifest["config"] != CONFIG:                       
+            raise SystemExit(f"取り方が台帳と違います。別のフォルダを使ってください\n"
+                             f"台帳: {manifest['config']}\n今回: {CONFIG}")
+        return manifest
     return {"config": CONFIG, "shards": {}}
 
 def save_manifest(manifest):
@@ -39,14 +45,24 @@ def save_manifest(manifest):
         json.dump(manifest, f, indent=2)
     os.replace(tmp, manifest_path)
 
-model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
+tok = AutoTokenizer.from_pretrained("openai-community/gpt2")
+model = AutoModel.from_pretrained("openai-community/gpt2").cuda().eval()
+model.h = model.h[:LAYER + 1]
+
 ds = load_dataset("NeelNanda/pile-10k", split="train")
 
-def get_acts(chunk):
-    with torch.no_grad():
-        _, cache = model.run_with_cache(chunk, names_filter=HOOK, stop_at_layer=7)
-    return cache[HOOK][0].cpu().numpy()
+saved = {}
+def hook(module, inputs, output):                              
+    saved["acts"] = output
+model.h[LAYER].register_forward_hook(hook)
 
+ds = load_dataset("NeelNanda/pile-10k", split="train")
+
+def get_acts(chunk):                                     
+    with torch.no_grad():
+        model(chunk, use_cache=False)
+    return saved["acts"][0].cpu().numpy()
+    
 manifest = load_manifest()
 
 t0 = time.perf_counter()
@@ -61,7 +77,8 @@ for shard_idx in range(N_SHARDS):
     first = shard_idx * DOCS_PER_SHARD
     buffer = []
     for doc in ds.select(range(first, first + DOCS_PER_SHARD)):
-        tokens = model.to_tokens(doc["text"], truncate=False)[0]
+        ids = [tok.bos_token_id] + tok(doc["text"], truncation=True, max_length=MAX_TOKENS_PER_DOC - 1).input_ids
+        tokens = torch.tensor(ids).cuda() 
         for start in range(0, min(len(tokens), MAX_TOKENS_PER_DOC), CTX):
             chunk = tokens[start:start + CTX].unsqueeze(0)
             buffer.append(get_acts(chunk))
