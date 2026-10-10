@@ -2,6 +2,7 @@ import os
 import time
 import numpy as np
 import torch
+import json
 from datasets import load_dataset
 from transformer_lens import HookedTransformer
 
@@ -9,10 +10,34 @@ HOOK = "blocks.6.hook_resid_post"
 CTX = 1024
 DOCS_PER_SHARD = 100
 N_SHARDS = 10
-MAX_TOKENS_PER_DOC = 1024  
+MAX_TOKENS_PER_DOC = 1024 
+
+CONFIG = {                  
+    "model": "gpt2-small",
+    "loader": "HookedTransformer.from_pretrained",   
+    "hook": HOOK,
+    "dtype": "float32",
+    "dataset": "NeelNanda/pile-10k",
+    "ctx": CTX,
+    "max_tokens_per_doc": MAX_TOKENS_PER_DOC,
+    "docs_per_shard": DOCS_PER_SHARD,
+}
 
 out_dir = os.path.join(os.environ["ACTS_DIR"], "gpt2_16")
 os.makedirs(out_dir, exist_ok=True)
+manifest_path = os.path.join(out_dir, "manifest.json")
+
+def load_manifest():
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as f:
+            return json.load(f)
+    return {"config": CONFIG, "shards": {}}
+
+def save_manifest(manifest):
+    tmp = manifest_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(manifest, f, indent=2)
+    os.replace(tmp, manifest_path)
 
 model = HookedTransformer.from_pretrained("gpt2-small", device="cuda")
 ds = load_dataset("NeelNanda/pile-10k", split="train")
@@ -22,12 +47,15 @@ def get_acts(chunk):
         _, cache = model.run_with_cache(chunk, names_filter=HOOK, stop_at_layer=7)
     return cache[HOOK][0].cpu().numpy()
 
+manifest = load_manifest()
+
 t0 = time.perf_counter()
 n = 0
 for shard_idx in range(N_SHARDS):
-    path = os.path.join(out_dir, f"shard_{shard_idx:05d}.npy")
-    if os.path.exists(path):
-        print(f"skip {path}")
+    name = f"shard_{shard_idx:05d}.npy"
+    path = os.path.join(out_dir, name)
+    if name in manifest["shards"]:
+        print(f"skip {name}")
         continue
 
     first = shard_idx * DOCS_PER_SHARD
@@ -44,6 +72,13 @@ for shard_idx in range(N_SHARDS):
     with open(tmp, "wb") as f:
         np.save(f, acts)
     os.replace(tmp, path)
+
+    
+    manifest["shards"][name] = {                 # 2. そのあとで台帳に書き足す
+            "docs": [first, first + DOCS_PER_SHARD - 1],
+            "tokens": len(acts),
+    }
+    save_manifest(manifest)
     
     n += len(acts)
     print(f"saved {path} {acts.shape}")
