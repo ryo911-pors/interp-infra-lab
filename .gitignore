@@ -2,11 +2,16 @@
 CLAUDE.md
 PLAN.md
 
+# 鍵やトークン（HF_TOKEN、AWS の鍵など）
+.env
+.env.*
+
 # 活性値データ（GB 単位。そもそもリポジトリの外に置く）
 data/
 *.npy
 *.safetensors
 *.parquet
+*.tmp
 
 # Python
 .venv/
