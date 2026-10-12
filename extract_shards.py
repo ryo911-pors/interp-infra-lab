@@ -31,6 +31,7 @@ CONFIG = {
     "ctx": CTX,
     "max_tokens_per_doc": MAX_TOKENS_PER_DOC,
     "docs_per_shard": DOCS_PER_SHARD,
+    "index": "shard_XXXXX_index.npy = int32 [doc, pos] per row"
 }
 
 out_dir = os.path.join(os.environ["ACTS_DIR"], OUT_NAME)
@@ -52,6 +53,12 @@ def save_manifest(manifest):
     with open(tmp, "w") as f:
         json.dump(manifest, f, indent=2)
     os.replace(tmp, manifest_path)
+
+def save_npy(path, arr):
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        np.save(f, arr)
+    os.replace(tmp, path)
 
 tok = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModel.from_pretrained(MODEL, dtype=getattr(torch, DTYPE)).to(DEVICE).eval()
@@ -92,27 +99,29 @@ for shard_idx in range(N_SHARDS):
 
     first = shard_idx * DOCS_PER_SHARD
     buffer = []
-    for doc in ds.select(range(first, first + DOCS_PER_SHARD)):
+    index = []
+    for doc_id, doc in enumerate(ds.select(range(first, first + DOCS_PER_SHARD)), start=first):
         ids = tok(doc["text"], truncation=True, max_length=MAX_TOKENS_PER_DOC).input_ids
         if ids[0] != tok.bos_token_id:
             ids = [tok.bos_token_id] + ids[:MAX_TOKENS_PER_DOC - 1]
         tokens = torch.tensor(ids).to(DEVICE)
-        for start in range(0, min(len(tokens), MAX_TOKENS_PER_DOC), CTX):
+        for start in range(0, len(tokens), CTX):
             chunk = tokens[start:start + CTX].unsqueeze(0)
-            buffer.append(get_acts(chunk))
+            acts = get_acts(chunk)
+            buffer.append(acts)
+            pos = np.arange(start, start + len(acts))
+            index.append(np.stack([np.full(len(acts), doc_id), pos], axis=1))
 
     acts = np.concatenate(buffer)
-    
-    tmp = path + ".tmp"
-    with open(tmp, "wb") as f:
-        np.save(f, acts)
-    os.replace(tmp, path)
-
-    
-    manifest["shards"][name] = {                 # 2. そのあとで台帳に書き足す
-            "docs": [first, first + DOCS_PER_SHARD - 1],
-            "tokens": len(acts),
+    idx = np.concatenate(index).astype(np.int32)
+    save_npy(path, acts)
+    save_npy(path.replace(".npy", "_index.npy"), idx)
+    manifest["shards"][name] = {
+        "docs": [first, first + DOCS_PER_SHARD - 1],
+        "tokens": len(acts),
     }
+
+
     save_manifest(manifest)
     
     n += len(acts)
