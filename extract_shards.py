@@ -7,25 +7,33 @@ from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
 
 
+MODEL = os.environ.get("MODEL", "openai-community/gpt2")
+LAYER = int(os.environ.get("LAYER", "6"))
+DTYPE = os.environ.get("DTYPE", "float32")
+OUT_NAME = os.environ.get("OUT_NAME", "gpt2_16")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 CTX = 1024
 DOCS_PER_SHARD = 100
 N_SHARDS = 10
 MAX_TOKENS_PER_DOC = 1024 
-LAYER = 6
+
 
 CONFIG = {                  
-    "model": "gpt2-small",
+    "model": MODEL,
     "loader": "transformers.AutoModel (no processing)",   
     "hook": f"h[{LAYER}] output",
-    "dtype": "float32",
+    "dtype": DTYPE,
+    "stored_as" : "uint16 (bf16 bits)" if DTYPE == "bfloat16" else DTYPE,
+    "device": DEVICE,
     "dataset": "NeelNanda/pile-10k",
     "ctx": CTX,
     "max_tokens_per_doc": MAX_TOKENS_PER_DOC,
     "docs_per_shard": DOCS_PER_SHARD,
 }
 
-out_dir = os.path.join(os.environ["ACTS_DIR"], "gpt2_16_hf")
+out_dir = os.path.join(os.environ["ACTS_DIR"], OUT_NAME)
 os.makedirs(out_dir, exist_ok=True)
 manifest_path = os.path.join(out_dir, "manifest.json")
 
@@ -45,23 +53,31 @@ def save_manifest(manifest):
         json.dump(manifest, f, indent=2)
     os.replace(tmp, manifest_path)
 
-tok = AutoTokenizer.from_pretrained("openai-community/gpt2")
-model = AutoModel.from_pretrained("openai-community/gpt2").cuda().eval()
-model.h = model.h[:LAYER + 1]
+tok = AutoTokenizer.from_pretrained(MODEL)
+model = AutoModel.from_pretrained(MODEL, dtype=getattr(torch, DTYPE)).to(DEVICE).eval()
 
-ds = load_dataset("NeelNanda/pile-10k", split="train")
+if hasattr(model, "h"):
+    model.h = model.h[:LAYER + 1]
+    layer = model.h
+else:
+    model.layers = model.layers[:LAYER+1]
+    layer = model.layers
+
 
 saved = {}
 def hook(module, inputs, output):                              
     saved["acts"] = output
-model.h[LAYER].register_forward_hook(hook)
+layer[LAYER].register_forward_hook(hook)
 
 ds = load_dataset("NeelNanda/pile-10k", split="train")
 
 def get_acts(chunk):                                     
     with torch.no_grad():
         model(chunk, use_cache=False)
-    return saved["acts"][0].cpu().numpy()
+    acts = saved["acts"][0].cpu()
+    if DTYPE == "bfloat16":
+        return acts.view(torch.uint16).numpy()
+    return acts.numpy()
     
 manifest = load_manifest()
 
@@ -77,8 +93,10 @@ for shard_idx in range(N_SHARDS):
     first = shard_idx * DOCS_PER_SHARD
     buffer = []
     for doc in ds.select(range(first, first + DOCS_PER_SHARD)):
-        ids = [tok.bos_token_id] + tok(doc["text"], truncation=True, max_length=MAX_TOKENS_PER_DOC - 1).input_ids
-        tokens = torch.tensor(ids).cuda() 
+        ids = tok(doc["text"], truncation=True, max_length=MAX_TOKENS_PER_DOC).input_ids
+        if ids[0] != tok.bos_token_id:
+            ids = [tok.bos_token_id] + ids[:MAX_TOKENS_PER_DOC - 1]
+        tokens = torch.tensor(ids).to(DEVICE)
         for start in range(0, min(len(tokens), MAX_TOKENS_PER_DOC), CTX):
             chunk = tokens[start:start + CTX].unsqueeze(0)
             buffer.append(get_acts(chunk))
