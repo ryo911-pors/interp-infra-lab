@@ -60,6 +60,9 @@ def save_npy(path, arr):
         np.save(f, arr)
     os.replace(tmp, path)
 
+manifest = load_manifest()
+save_manifest(manifest)
+
 tok = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModel.from_pretrained(MODEL, dtype=getattr(torch, DTYPE)).to(DEVICE).eval()
 
@@ -86,8 +89,7 @@ def get_acts(chunk):
         return acts.view(torch.uint16).numpy()
     return acts.numpy()
     
-manifest = load_manifest()
-save_manifest(manifest)
+
 
 t0 = time.perf_counter()
 n = 0
