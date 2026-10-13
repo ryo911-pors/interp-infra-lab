@@ -3,6 +3,7 @@ import time
 import numpy as np
 import torch
 import json
+import uuid
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
 
@@ -49,7 +50,7 @@ def load_manifest():
     return {"config": CONFIG, "shards": {}}
 
 def save_manifest(manifest):
-    tmp = manifest_path + ".tmp"
+    tmp = f"{manifest_path}.{uuid.uuid4().hex[:8]}.tmp"
     with open(tmp, "w") as f:
         json.dump(manifest, f, indent=2)
     os.replace(tmp, manifest_path)

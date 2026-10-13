@@ -4,6 +4,12 @@ metadata:
   name: extract
 
 spec:
+
+  completionMode: Indexed
+  completions: 10
+  parallelism: 3
+  
+  
   backoffLimit: 2
   template:
     spec:
@@ -16,7 +22,9 @@ spec:
         - name: ACTS_DIR
           value: /data
         - name: OUT_NAME
-          value: gpt2_16_kind
+          value: gpt2_16_kind_indexed
+        - name: HF_HOME
+          value: /data/hf_cache
         volumeMounts:
         - name: acts
           mountPath: /data
