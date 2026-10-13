@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: extract
+
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: extract
+        image: interp-extract:cpu
+        imagePullPolicy: Never
+        env:
+        - name: ACTS_DIR
+          value: /data
+        - name: OUT_NAME
+          value: gpt2_16_kind
+        volumeMounts:
+        - name: acts
+          mountPath: /data
+      volumes:
+      - name: acts
+        hostPath:
+          path: /data/acts
