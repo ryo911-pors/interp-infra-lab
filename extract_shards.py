@@ -87,13 +87,14 @@ def get_acts(chunk):
     return acts.numpy()
     
 manifest = load_manifest()
+save_manifest(manifest)
 
 t0 = time.perf_counter()
 n = 0
 for shard_idx in range(N_SHARDS):
     name = f"shard_{shard_idx:05d}.npy"
     path = os.path.join(out_dir, name)
-    if name in manifest["shards"]:
+    if os.path.exists(path.replace(".npy", ".done.json")):
         print(f"skip {name}")
         continue
 
@@ -116,13 +117,9 @@ for shard_idx in range(N_SHARDS):
     idx = np.concatenate(index).astype(np.int32)
     save_npy(path, acts)
     save_npy(path.replace(".npy", "_index.npy"), idx)
-    manifest["shards"][name] = {
-        "docs": [first, first + DOCS_PER_SHARD - 1],
-        "tokens": len(acts),
-    }
 
-
-    save_manifest(manifest)
+    with open(path.replace(".npy", ".done.json"), "w") as f:
+        json.dump({"docs" : [first, first + DOCS_PER_SHARD - 1], "tokens": len(acts)}, f)
     
     n += len(acts)
     print(f"saved {path} {acts.shape}")
