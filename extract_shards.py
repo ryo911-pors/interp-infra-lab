@@ -93,7 +93,13 @@ def get_acts(chunk):
 
 t0 = time.perf_counter()
 n = 0
-for shard_idx in range(N_SHARDS):
+if "JOB_COMPLETION_INDEX" in os.environ:
+    shard_ids = [int(os.environ["JOB_COMPLETION_INDEX"])]
+else:
+    shard_ids = range(N_SHARDS)
+
+for shard_idx in shard_ids:
+    
     name = f"shard_{shard_idx:05d}.npy"
     path = os.path.join(out_dir, name)
     if os.path.exists(path.replace(".npy", ".done.json")):
