@@ -164,6 +164,7 @@ for shard_idx in shard_ids:
 
     acts = np.concatenate(buffer)
     idx = np.concatenate(index).astype(np.int32)
+    print(f"uploading {name} ...", flush=True)
     save_npy(path, acts)
     save_npy(path.replace(".npy", "_index.npy"), idx)
 
