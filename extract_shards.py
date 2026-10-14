@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import json
 import uuid
+import io
+import boto3
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
 
@@ -20,6 +22,8 @@ DOCS_PER_SHARD = 100
 N_SHARDS = 10
 MAX_TOKENS_PER_DOC = 1024 
 
+s3 = boto3.client("s3")
+
 
 CONFIG = {                  
     "model": MODEL,
@@ -35,32 +39,68 @@ CONFIG = {
     "index": "shard_XXXXX_index.npy = int32 [doc, pos] per row"
 }
 
-out_dir = os.path.join(os.environ["ACTS_DIR"], OUT_NAME)
-os.makedirs(out_dir, exist_ok=True)
-manifest_path = os.path.join(out_dir, "manifest.json")
+def join(a, b):                        # S3 は区切りが必ず "/"（Windows の os.path.join は "\" にしてしまう）
+    if a.startswith("s3://"):
+        return a.rstrip("/") + "/" + b
+    return os.path.join(a, b)
+
+out_dir = join(os.environ["ACTS_DIR"], OUT_NAME)
+if not out_dir.startswith("s3://"):    # S3 にはフォルダが無いので、作るのは手元のときだけ
+    os.makedirs(out_dir, exist_ok=True)
+manifest_path = join(out_dir, "manifest.json")
 
 def load_manifest():
-    if os.path.exists(manifest_path):
-        with open(manifest_path) as f:
-            manifest = json.load(f)
+    if exists(manifest_path):
+        manifest = json.loads(read_bytes(manifest_path))
         if manifest["config"] != CONFIG:                       
             raise SystemExit(f"取り方が台帳と違います。別のフォルダを使ってください\n"
                              f"台帳: {manifest['config']}\n今回: {CONFIG}")
         return manifest
     return {"config": CONFIG, "shards": {}}
 
+def split_s3(path):
+    bucket, key = path[len("s3://"):].split("/", 1)
+    return bucket, key
+
+def write_bytes(path, data):
+    if path.startswith("s3://"):
+        bucket, key = split_s3(path)
+        s3.put_object(Bucket=bucket, Key=key, Body=data)
+    else:
+        tmp = f"{path}.{uuid.uuid4().hex[:8]}.tmp"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+
+def read_bytes(path):
+    if path.startswith("s3://"):
+        bucket, key = split_s3(path)
+        return s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def exists(path):
+    if path.startswith("s3://"):
+        bucket, key = split_s3(path)
+        try:
+            s3.head_object(Bucket=bucket, Key=key)
+            return True
+        except s3.exceptions.ClientError:
+            return False
+
+    return os.path.exists(path)
+
+
 def save_manifest(manifest):
-    tmp = f"{manifest_path}.{uuid.uuid4().hex[:8]}.tmp"
-    with open(tmp, "w") as f:
-        json.dump(manifest, f, indent=2)
-    os.replace(tmp, manifest_path)
+    write_bytes(manifest_path, json.dumps(manifest, indent=2).encode())
 
 def save_npy(path, arr):
-    tmp = path + ".tmp"
-    with open(tmp, "wb") as f:
-        np.save(f, arr)
-    os.replace(tmp, path)
+    buf = io.BytesIO()
+    np.save(buf, arr)
+    write_bytes(path, buf.getvalue())
 
+    
 manifest = load_manifest()
 save_manifest(manifest)
 
@@ -102,8 +142,8 @@ else:
 for shard_idx in shard_ids:
     
     name = f"shard_{shard_idx:05d}.npy"
-    path = os.path.join(out_dir, name)
-    if os.path.exists(path.replace(".npy", ".done.json")):
+    path = join(out_dir, name)
+    if exists(path.replace(".npy", ".done.json")):
         print(f"skip {name}")
         continue
 
@@ -127,8 +167,11 @@ for shard_idx in shard_ids:
     save_npy(path, acts)
     save_npy(path.replace(".npy", "_index.npy"), idx)
 
-    with open(path.replace(".npy", ".done.json"), "w") as f:
-        json.dump({"docs" : [first, first + DOCS_PER_SHARD - 1], "tokens": len(acts)}, f)
+    #with open(path.replace(".npy", ".done.json"), "w") as f:
+        #json.dump({"docs" : [first, first + DOCS_PER_SHARD - 1], "tokens": len(acts)}, f)
+
+    memo = {"docs": [first, first + DOCS_PER_SHARD - 1], "tokens": len(acts)}
+    write_bytes(path.replace(".npy", ".done.json"), json.dumps(memo).encode())
     
     n += len(acts)
     print(f"saved {path} {acts.shape}")
