@@ -14,3 +14,8 @@ provider "aws" {
 resource "aws_s3_bucket" "acts" {
   bucket = "ryo-interp-acts-321604617840"
 }
+
+resource "aws_ecr_repository" "extract" {
+  name = "interp-extract"
+}
+
