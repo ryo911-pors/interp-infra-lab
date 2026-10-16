@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: extract
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: extract
+
+spec:
+
+  completionMode: Indexed
+  completions: 10
+  parallelism: 3
+  
+  
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: extract
+      restartPolicy: Never
+      containers:
+      - name: extract
+        image: 321604617840.dkr.ecr.us-east-1.amazonaws.com/interp-extract:gpu
+
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        
+        env:
+        - name: ACTS_DIR
+          value: s3://ryo-interp-acts-321604617840
+        - name: OUT_NAME
+          value: gpt2_16_eks
+        #- name: HF_HOME
+          #value: /data/hf_cache
+      
