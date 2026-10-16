@@ -3,12 +3,10 @@ import time
 import numpy as np
 import torch
 import json
-import uuid
-import io
-import boto3
+
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer
-
+from storage import join, write_bytes, read_bytes, exists, save_npy
 
 MODEL = os.environ.get("MODEL", "openai-community/gpt2")
 LAYER = int(os.environ.get("LAYER", "6"))
@@ -22,7 +20,7 @@ DOCS_PER_SHARD = 100
 N_SHARDS = 10
 MAX_TOKENS_PER_DOC = 1024 
 
-s3 = boto3.client("s3")
+
 
 
 CONFIG = {                  
@@ -39,10 +37,7 @@ CONFIG = {
     "index": "shard_XXXXX_index.npy = int32 [doc, pos] per row"
 }
 
-def join(a, b):                        # S3 は区切りが必ず "/"（Windows の os.path.join は "\" にしてしまう）
-    if a.startswith("s3://"):
-        return a.rstrip("/") + "/" + b
-    return os.path.join(a, b)
+
 
 out_dir = join(os.environ["ACTS_DIR"], OUT_NAME)
 if not out_dir.startswith("s3://"):    # S3 にはフォルダが無いので、作るのは手元のときだけ
@@ -58,47 +53,12 @@ def load_manifest():
         return manifest
     return {"config": CONFIG, "shards": {}}
 
-def split_s3(path):
-    bucket, key = path[len("s3://"):].split("/", 1)
-    return bucket, key
-
-def write_bytes(path, data):
-    if path.startswith("s3://"):
-        bucket, key = split_s3(path)
-        s3.put_object(Bucket=bucket, Key=key, Body=data)
-    else:
-        tmp = f"{path}.{uuid.uuid4().hex[:8]}.tmp"
-        with open(tmp, "wb") as f:
-            f.write(data)
-        os.replace(tmp, path)
-
-def read_bytes(path):
-    if path.startswith("s3://"):
-        bucket, key = split_s3(path)
-        return s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-    with open(path, "rb") as f:
-        return f.read()
-
-
-def exists(path):
-    if path.startswith("s3://"):
-        bucket, key = split_s3(path)
-        try:
-            s3.head_object(Bucket=bucket, Key=key)
-            return True
-        except s3.exceptions.ClientError:
-            return False
-
-    return os.path.exists(path)
 
 
 def save_manifest(manifest):
     write_bytes(manifest_path, json.dumps(manifest, indent=2).encode())
 
-def save_npy(path, arr):
-    buf = io.BytesIO()
-    np.save(buf, arr)
-    write_bytes(path, buf.getvalue())
+
 
     
 manifest = load_manifest()
