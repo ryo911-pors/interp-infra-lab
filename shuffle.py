@@ -44,8 +44,40 @@ def scatter(shard_idx):
   write_bytes(done, b"{}")
   print(f"scattered shard {shard_idx}: {len(acts)} row -> {N_BOXES} boxes")
 
+def gather(box):
+  out = join(out_dir, f"shuffled_{box:05d}.npy")
+  done = out.replace(".npy", ".done.json")
+  if exists(done):
+    print(f"skip box {box}")
+    return
+
+  rng = np.random.default_rng([SEED, 2, box])
+
+  shards = []
+  index = []
+
+  for shard_idx in range(N_SHARDS):
+    shard = load_npy(join(box_dir(box), f"from_{shard_idx:05d}.npy"))
+    piece_idx = load_npy(join(box_dir(box), f"from_{shard_idx:05d}_index.npy"))
+    shards.append(shard)
+    index.append(piece_idx)
+
+  acts = np.concatenate(shards)
+  idx = np.concatenate(index)
+
+  order = rng.permutation(len(acts))
+  acts = acts[order]
+  idx = idx[order]
+
+  save_npy(out, acts)
+  save_npy(out.replace(".npy", "_index.npy"), idx) 
+  write_bytes(done, b"{}")
+  print(f"gathered box {box}: {len(acts)} rows")
+
 if __name__ == "__main__":
     for shard_idx in range(N_SHARDS):
         scatter(shard_idx)
+    for box in range(N_BOXES):
+        gather(box)
 
     
