@@ -1,5 +1,4 @@
 
-import io
 import os
 import uuid
 
@@ -30,6 +29,10 @@ def read_bytes(path):
         return f.read()
 
 
+def load_npy(path):
+    return np.load(io.BytesIO(read_bytes(path)))
+
+
 def exists(path):
     if path.startswith("s3://"):
         bucket, key = split_s3(path)
@@ -50,3 +53,5 @@ def save_npy(path, arr):
     buf = io.BytesIO()
     np.save(buf, arr)
     write_bytes(path, buf.getvalue())
+
+    

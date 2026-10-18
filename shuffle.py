@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-from storage import join, read_bytes, save_npy, write_bytes, exists
+from storage import join, read_bytes, save_npy, write_bytes, exists, load_npy
 
 IN_NAME = os.environ.get("IN_NAME", "gpt2_16_kind_indexed")
 OUT_NAME = os.environ.get("OUT_NAME", "gpt2_16_shuffled")
@@ -14,8 +14,6 @@ SEED = 0
 in_dir = join(os.environ["ACTS_DIR"], IN_NAME)
 out_dir = join(os.environ["ACTS_DIR"], OUT_NAME)
 
-def load_npy(path):
-  return np.load(io.BytesIO(read_bytes(path)))
 
 def box_dir(box):
   d = join(out_dir, f"stage1/box_{box:05d}")
