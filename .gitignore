@@ -2,6 +2,9 @@
 CLAUDE.md
 PLAN.md
 
+# 白紙から書く練習（下書きと記録。ポートフォリオに混ぜない）
+practice/
+
 # 鍵やトークン（HF_TOKEN、AWS の鍵など）
 .env
 .env.*
