@@ -5,6 +5,9 @@ PLAN.md
 # 白紙から書く練習（下書きと記録。ポートフォリオに混ぜない）
 practice/
 
+# ブログ記事の下書き（DevelopersIO など。公開は各サイトで）
+articles/
+
 # 鍵やトークン（HF_TOKEN、AWS の鍵など）
 .env
 .env.*
