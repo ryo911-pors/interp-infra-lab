@@ -73,9 +73,24 @@ def gather(box):
   print(f"gathered box {box}: {len(acts)} rows")
 
 if __name__ == "__main__":
-    for shard_idx in range(N_SHARDS):
-        scatter(shard_idx)
-    for box in range(N_BOXES):
-        gather(box)
+    stage = os.environ["STAGE"]
+
+    if stage not in ("scatter", "gather"):
+      raise SystemExit(f"STAGE must be scatter or gather, got: {stage}")
+
+    if "JOB_COMPLETION_INDEX" in os.environ:
+      ids = [int(os.environ["JOB_COMPLETION_INDEX"])]
+    else:
+      ids = range(N_SHARDS) if stage == "scatter" else range(N_BOXES)
+
+
+    for i in ids:
+      if stage == "scatter":
+        scatter(i)
+
+      else:
+        gather(i)
+        
+        
 
     
