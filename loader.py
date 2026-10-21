@@ -3,7 +3,7 @@ import numpy as np
 
 from storage import join, exists, load_npy
 
-def load_batches(dir_path, batch_size):
+def load_batches(dir_path, batch_size, drop_bos=True):
   leftover = None
   box = 0
   while True:
@@ -11,6 +11,11 @@ def load_batches(dir_path, batch_size):
     if not exists(path):
       break
     acts = load_npy(path)
+    idx = load_npy(path.replace(".npy", "_index.npy"))
+    if drop_bos:
+      keep = idx[:, 1] > 0 
+      acts = acts[keep]
+      
     print(f"read box {box}: {acts.shape}")
     if leftover is not None:
       acts = np.concatenate([leftover, acts])
