@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: extract
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scatter
+spec:
+  completionMode: Indexed
+  completions: 10
+  parallelism: 3
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: extract
+      restartPolicy: Never
+      containers:
+      - name: shuffle
+        image: 321604617840.dkr.ecr.us-east-1.amazonaws.com/interp-extract:cpu
+
+        command: ["python", "shuffle.py"]
+        
+        env:
+        - name: ACTS_DIR
+          value: s3://ryo-interp-acts-321604617840
+        - name: IN_NAME
+          value: gpt2_16_eks
+        - name: OUT_NAME
+          value: gpt2_16_eks_shuffled
+        - name: STAGE
+          value: scatter
