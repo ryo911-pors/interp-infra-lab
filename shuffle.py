@@ -49,6 +49,13 @@ def gather(box):
     print(f"skip box {box}")
     return
 
+  missing = []
+  for shard_idx in range(N_SHARDS):
+    if not exists(join(out_dir, f"stage1/from_{shard_idx:05d}.done.json")):
+      missing.append(shard_idx)
+  if missing:
+    raise SystemExit(f"stage 1 is not finished, missing shards: {missing}")
+
   rng = np.random.default_rng([SEED, 2, box])
 
   shards = []
