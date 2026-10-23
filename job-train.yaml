@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: train
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      serviceAccountName: extract
+      restartPolicy: Never
+      containers:
+      - name: train
+        image: 321604617840.dkr.ecr.us-east-1.amazonaws.com/interp-extract:gpu
+        command: ["python", "train.py"]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        env:
+        - name: ACTS_DIR
+          value: s3://ryo-interp-acts-321604617840
+        - name: IN_NAME
+          value: gpt2_16_eks_shuffled
+        - name: OUT_NAME
+          value: sae/gpt2_16_eks_shuffled/l1_10_lr3e-4_ep30

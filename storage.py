@@ -1,7 +1,7 @@
 
 import os
 import uuid
-
+import io
 import boto3
 import numpy as np
 
