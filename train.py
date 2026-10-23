@@ -17,9 +17,13 @@ device = "cuda"
 l1_coeff = 10
 epochs = 30
 lr=3e-4
+batch_size = 4096
+d_sae = 12288
 
 torch.manual_seed(0) #fix the random init so every run starts from the same weights
-sae = SAE(768, 12288).to(device) 
+first = next(load_batches(in_dir, batch_size))
+d_in = first.shape[1]
+sae = SAE(d_in, d_sae).to(device)
 opt = torch.optim.Adam(sae.parameters(), lr=lr)
 #fired = torch.zeros(12288, device=device) # how many times each feature fired in the last epoch(0 : dead)
 
@@ -27,12 +31,12 @@ step = 0
 
 config = {
     "data": in_dir,
-    "d_in": 768,
-    "d_sae": 12288,
+    "d_in": d_in,
+    "d_sae": d_sae,
     "l1_coeff": l1_coeff,
     "lr": lr,
     "epochs": epochs,
-    "batch_size": 4096,
+    "batch_size": batch_size,
     "seed": 0,
     "drop_bos": True,
 }
@@ -42,8 +46,8 @@ metrics = []
 
 for epoch in range(epochs):
   print(f"epoch {epoch}")
-  fired = torch.zeros(12288, device=device) # how many times each feature fired in the last epoch(0 : dead)
-  for batch in load_batches(in_dir, 4096):
+  fired = torch.zeros(d_sae, device=device) # how many times each feature fired in the last epoch(0 : dead)
+  for batch in load_batches(in_dir, batch_size):
     x = torch.from_numpy(batch).to(device)
     x_hat, f = sae(x)
     loss, recon, sparsity = loss_fn(x, x_hat, f, l1_coeff)
@@ -61,7 +65,7 @@ for epoch in range(epochs):
       print(f"step {step} recon {recon.item():.1f} L0 {l0.item():.1f}")
     step += 1
 
-  print("never fired features", (fired == 0).sum().item(), "/ 12288")
+  print(f"never fired features {(fired == 0).sum().item()} / {d_sae}")
 
   l0 = (f > 0).float().sum(dim=1).mean().item()
   metrics.append({
