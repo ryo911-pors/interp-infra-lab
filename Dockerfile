@@ -7,6 +7,6 @@ RUN pip install --no-cache-dir torch==2.14.1 --index-url https://download.pytorc
 
 RUN pip install --no-cache-dir transformers==5.19.0 datasets==5.1.0 numpy==2.5.3 huggingface-hub==1.33.0 boto3==1.43.112
 
-COPY storage.py extract_shards.py shuffle.py .
+COPY storage.py extract_shards.py shuffle.py train.py loader.py sae.py .
 
 CMD ["python", "extract_shards.py"]
